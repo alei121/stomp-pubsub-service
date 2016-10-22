@@ -1,0 +1,68 @@
+<html>
+<head>
+    <title>Pubsub with Stomp over WebSocket</title>
+    <script src="https://cdn.rawgit.com/jmesnil/stomp-websocket/master/lib/stomp.min.js"></script>
+    <script type="text/javascript">
+        var stompClient = null;
+
+        function setConnected(connected) {
+            document.getElementById('connect').disabled = connected;
+            document.getElementById('disconnect').disabled = !connected;
+            document.getElementById('publish').disabled = !connected;
+            document.getElementById('text').disabled = !connected;
+            document.getElementById('text').value = '';
+            document.getElementById('messages').innerHTML = '';
+        }
+        
+        function creatURL(toPath) {
+          var url = (location.protocol === "https:") ? "wss://" : "ws://";
+          url += location.host;
+          if (location.pathname.endsWith(".html") || location.pathname.endsWith("/")) {
+              var index = location.pathname.lastIndexOf("/");
+              url += location.pathname.substring(0, index);
+          }
+          url += "/" + toPath;
+          return url;
+        }
+
+        function connect() {
+            var url = creatURL("pubsub");
+            var ws = new WebSocket(url);
+            ws.binaryType = 'arraybuffer';
+            stompClient = Stomp.over(ws);
+            stompClient.connect({}, function(frame) {
+                setConnected(true);
+                console.log('Connected');
+                stompClient.subscribe('/topic/greetings', function(message){
+                    showMessages(JSON.parse(message.body).content);
+                });
+            });
+        }
+
+        function disconnect() {
+            stompClient.disconnect();
+            setConnected(false);
+            console.log("Disconnected");
+        }
+
+        function publish() {
+            var text = document.getElementById('text').value;
+            stompClient.send("/topic/greetings", {}, JSON.stringify({ 'content': text }));
+        }
+
+        function showMessages(text) {
+            var messages = document.getElementById('messages');
+            messages.appendChild(document.createTextNode(text));
+            messages.appendChild(document.createElement('br'));
+        }
+    </script>
+</head>
+<body>
+    <button id="connect" onclick="connect();">Connect</button>
+    <button id="disconnect" disabled="disabled" onclick="disconnect();">Disconnect</button>
+    <p/>
+    <input id="text" type="text" disabled="disabled"/>
+    <button id="publish" disabled="disabled" onclick="publish();">Publish</button>
+    <p id="messages"></p>
+</body>
+</html>
