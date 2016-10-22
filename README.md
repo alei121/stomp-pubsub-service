@@ -12,10 +12,10 @@ A web page is provided to act as a client to publish and subscribe.
 ### Compile with:
   `mvn clean install`
   
-### Start borker in command line:
+### Run with:
 *  `java -jar target/stomp-pubsub-service-0.0.1-SNAPSHOT.war`
 *  Open multiple browser windows to `http://localhost:8080/index.html`
 *  `Connect`, type a message and `Publish`
 *  All windows will show the published message
 
-Alternatively, to start broker in tomcat, copy `target/stomp-pubsub-service-0.0.1-SNAPSHOT.war` to tomcat webapp directory
+Alternatively, to start service in tomcat, copy `target/stomp-pubsub-service-0.0.1-SNAPSHOT.war` to tomcat webapp directory
