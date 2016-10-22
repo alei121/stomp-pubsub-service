@@ -13,7 +13,8 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @Configuration
 @EnableAutoConfiguration
 @EnableWebSocket
-@ComponentScan("samples.websocket.config")
+@ComponentScan
+@ComponentScan(basePackageClasses = { SecurityConfig.class })
 public class StompPubsub extends SpringBootServletInitializer implements
 		WebSocketConfigurer {
 
