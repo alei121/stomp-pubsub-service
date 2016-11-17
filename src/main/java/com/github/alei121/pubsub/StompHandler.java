@@ -1,5 +1,6 @@
 package com.github.alei121.pubsub;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
@@ -14,7 +15,6 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import com.github.alei121.stomp.StompCommand;
 import com.github.alei121.stomp.StompConnection;
 import com.github.alei121.stomp.StompMessage;
 import com.github.alei121.stomp.StompSubscription;
@@ -30,7 +30,7 @@ public class StompHandler extends TextWebSocketHandler {
 		out.write(ba);
 		TextMessage message = new TextMessage(ba.toByteArray());
 		session.sendMessage(message);
-		if (out.getCommand() == StompCommand.ERROR) {
+		if (out.getCommand() == StompMessage.Command.ERROR) {
 			session.close(CloseStatus.NOT_ACCEPTABLE);
 		}
 	}
@@ -50,7 +50,7 @@ public class StompHandler extends TextWebSocketHandler {
 		String dest = stomp.getAttribute("destination");
 		Queue<StompSubscription<WebSocketSession>> subscriptions = mapOfTopicToSubscriptions.get(dest);
 		if (subscriptions != null) {
-			stomp.setCommand(StompCommand.MESSAGE);
+			stomp.setCommand(StompMessage.Command.MESSAGE);
 			stomp.setAttribute("message-id", Integer.toString(currentMessageID.getAndIncrement()));
 			for (StompSubscription<WebSocketSession> subscription : subscriptions) {
 				// TODO reconstructing everytime!!!
@@ -65,9 +65,10 @@ public class StompHandler extends TextWebSocketHandler {
 
 	@Override
 	protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {		
-		StompMessage stomp = StompMessage.parse(message.getPayload());
+		StompMessage stomp = StompMessage.parse(new ByteArrayInputStream(message.getPayload().getBytes()));
 		switch (stomp.getCommand()) {
 		case CONNECT:
+		case STOMP:
 			connect(session, stomp);
 			break;
 		case SUBSCRIBE:

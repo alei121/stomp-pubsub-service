@@ -1,13 +1,14 @@
 package com.github.alei121.stomp;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 
 /*
+ * This class is self-sufficient to parse and generate STOMP messages.
  * 
  * Note for WebSocket:
  * If input comes as WebSocket text type, (WS RFC says Text is UTF-8)
@@ -19,15 +20,32 @@ import java.util.Map;
  * Unless STOMP message body is also UTF-8, STOMP messages must be sent as binary
  */
 public class StompMessage {
-	StompCommand command;
+	public enum Command {
+		CONNECT, STOMP, CONNECTED, SEND, SUBSCRIBE, UNSUBSCRIBE, ACK, NACK,
+		BEGIN, COMMIT, ABORT, DISCONNECT, MESSAGE, RECEIPT, ERROR;
+		
+		private static Map<String, Command> mapOfStringToCommand = new HashMap<>();
+		static {
+			for (Command command : Command.values()) {
+				mapOfStringToCommand.put(command.name(), command);
+			}
+		}
+		
+		public static Command get(String value) {
+			return mapOfStringToCommand.get(value);
+		}
+	}
+
+	
+	Command command;
 	Map<String, String> attributes = new HashMap<>();
 	byte[] content;
 	
-	public StompCommand getCommand() {
+	public Command getCommand() {
 		return command;
 	}
 	
-	public void setCommand(StompCommand command) {
+	public void setCommand(Command command) {
 		this.command = command;
 	}
 	
@@ -37,6 +55,10 @@ public class StompMessage {
 	
 	public void setAttribute(String name, String value) {
 		attributes.put(name, value);
+	}
+	
+	public byte[] getContent() {
+		return content;
 	}
 	
 	public void setContent(byte[] content) {
@@ -79,19 +101,16 @@ public class StompMessage {
 		return new String(line, 0, index);			
 	}
 	
-	public static StompMessage parse(String message) throws IOException {
-		return parse(new ByteArrayInputStream(message.getBytes()));
-	}
-
 	/*
 	 * Using InputStream instead of Reader because
 	 * content-length is octet count instead of character count
 	 */
-	public static StompMessage parse(InputStream reader) throws IOException {
+	public static StompMessage parse(InputStream reader) throws IOException, ParseException {
 		StompMessage stomp = new StompMessage();
 		
 		String line = readLine(reader);
-		StompCommand command = StompCommand.valueOf(line);
+		Command command = Command.get(line);
+		if (command == null) throw new ParseException("Unknown command: " + line, 0);
 		stomp.setCommand(command);
 		
 		// Attributes
@@ -114,7 +133,9 @@ public class StompMessage {
 			reader.read(content);
 			stomp.setContent(content);
 			// TODO check last byte
-			reader.read();
+			if (reader.read() != 0) {
+				throw new ParseException("End byte not zero in value", -1);
+			}
 		}
 		else {
 			byte[] buffer = new byte[1024];
@@ -122,18 +143,20 @@ public class StompMessage {
 			while (length < 1024) {
 				int b = reader.read();
 				if (b == -1) {
-					// TODO premature end of stream
-					break;
+					throw new ParseException("Premature end of stream", -1);
 				}
-				if (b == 0) break;
+				if (b == 0) {
+					if (length > 0) {
+						byte[] content = new byte[length];
+						System.arraycopy(buffer, 0, content, 0, length);
+						stomp.setContent(content);
+					}
+					return stomp;
+				}
 				buffer[length] = (byte)b;
 				length++;
 			}
-			if (length > 0) {
-				byte[] content = new byte[length];
-				System.arraycopy(buffer, 0, content, 0, length);
-				stomp.setContent(content);
-			}
+			throw new ParseException("Message too long", -1);
 		}
 		return stomp;
 	}

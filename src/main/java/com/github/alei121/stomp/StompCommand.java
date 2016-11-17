@@ -1,6 +1,0 @@
-package com.github.alei121.stomp;
-
-public enum StompCommand {
-	CONNECT, STOMP, CONNECTED, SEND, SUBSCRIBE, UNSUBSCRIBE, ACK, NACK,
-	BEGIN, COMMIT, ABORT, DISCONNECT, MESSAGE, RECEIPT, ERROR;
-}

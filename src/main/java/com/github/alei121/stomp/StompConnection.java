@@ -12,36 +12,37 @@ public class StompConnection {
 	
 	public StompConnection(StompMessage message) {
 		String acceptVersion = message.getAttribute("accept-version");
-		if (acceptVersion == null) useVersion = "1.0";
-		
-		String[] versions = acceptVersion.split(",");
-		
-		useVersion = null;
-		for (String version : versions) {
-			if (supportedVersions.contains(version)) {
-				if (useVersion == null) {
-					useVersion = version;
-				}
-				else {
-					// Use the max version
-					if (version.compareTo(useVersion) > 0) {
+		if (acceptVersion != null) {
+			String[] versions = acceptVersion.split(",");
+
+			useVersion = null;
+			for (String version : versions) {
+				if (supportedVersions.contains(version)) {
+					if (useVersion == null) {
 						useVersion = version;
+					} else {
+						// Use the max version
+						if (version.compareTo(useVersion) > 0) {
+							useVersion = version;
+						}
 					}
 				}
 			}
+		} else {
+			useVersion = "1.0";
 		}
 	}
 	
 	public StompMessage getResponse() {
 		StompMessage message = new StompMessage();
 		if (useVersion != null) {
-			message.setCommand(StompCommand.CONNECTED);
+			message.setCommand(StompMessage.Command.CONNECTED);
 			message.setAttribute("version", useVersion);
 			// TODO heartbeat!!!
 			message.setAttribute("heart-beat", "0,0");
 		}
 		else {
-			message.setCommand(StompCommand.ERROR);
+			message.setCommand(StompMessage.Command.ERROR);
 			message.setAttribute("version", supportedVersionString);
 			String text = "Supported protocol versions are " + supportedVersionString;
 			message.setContent(text.getBytes());
