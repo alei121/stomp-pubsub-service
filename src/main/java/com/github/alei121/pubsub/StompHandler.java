@@ -16,26 +16,26 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.github.alei121.stomp.StompConnection;
-import com.github.alei121.stomp.StompMessage;
+import com.github.alei121.stomp.StompFrame;
 import com.github.alei121.stomp.StompSubscription;
 
 // TODO incomplete!!!
 public class StompHandler extends TextWebSocketHandler {
 	private static Map<String, Queue<StompSubscription<WebSocketSession>>> mapOfTopicToSubscriptions = new ConcurrentHashMap<>();
 	
-	public void connect(WebSocketSession session, StompMessage stomp) throws IOException {
+	public void connect(WebSocketSession session, StompFrame stomp) throws IOException {
 		StompConnection connection = new StompConnection(stomp);
-		StompMessage out = connection.getResponse();
+		StompFrame out = connection.getResponse();
 		ByteArrayOutputStream ba = new ByteArrayOutputStream();
 		out.write(ba);
 		TextMessage message = new TextMessage(ba.toByteArray());
 		session.sendMessage(message);
-		if (out.getCommand() == StompMessage.Command.ERROR) {
+		if (out.getCommand() == StompFrame.Command.ERROR) {
 			session.close(CloseStatus.NOT_ACCEPTABLE);
 		}
 	}
 	
-	public void subscribe(WebSocketSession session, StompMessage stomp) {
+	public void subscribe(WebSocketSession session, StompFrame stomp) {
 		StompSubscription<WebSocketSession> subscription = new StompSubscription<>(stomp, session);
 		Queue<StompSubscription<WebSocketSession>> subscriptions = mapOfTopicToSubscriptions.get(subscription.getDestination());
 		if (subscriptions == null) {
@@ -46,15 +46,15 @@ public class StompHandler extends TextWebSocketHandler {
 	}
 	
 	private static AtomicInteger currentMessageID = new AtomicInteger();
-	public void send(StompMessage stomp) throws IOException {
-		String dest = stomp.getAttribute("destination");
+	public void send(StompFrame stomp) throws IOException {
+		String dest = stomp.getHeader("destination");
 		Queue<StompSubscription<WebSocketSession>> subscriptions = mapOfTopicToSubscriptions.get(dest);
 		if (subscriptions != null) {
-			stomp.setCommand(StompMessage.Command.MESSAGE);
-			stomp.setAttribute("message-id", Integer.toString(currentMessageID.getAndIncrement()));
+			stomp.setCommand(StompFrame.Command.MESSAGE);
+			stomp.setHeader("message-id", Integer.toString(currentMessageID.getAndIncrement()));
 			for (StompSubscription<WebSocketSession> subscription : subscriptions) {
 				// TODO reconstructing everytime!!!
-				stomp.setAttribute("subscription", subscription.getId());
+				stomp.setHeader("subscription", subscription.getId());
 				ByteArrayOutputStream ba = new ByteArrayOutputStream();
 				stomp.write(ba);
 				TextMessage message = new TextMessage(ba.toByteArray());
@@ -65,7 +65,7 @@ public class StompHandler extends TextWebSocketHandler {
 
 	@Override
 	protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {		
-		StompMessage stomp = StompMessage.parse(new ByteArrayInputStream(message.getPayload().getBytes()));
+		StompFrame stomp = StompFrame.parse(new ByteArrayInputStream(message.getPayload().getBytes()));
 		switch (stomp.getCommand()) {
 		case CONNECT:
 		case STOMP:

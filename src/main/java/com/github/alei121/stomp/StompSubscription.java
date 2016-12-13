@@ -6,10 +6,10 @@ public class StompSubscription<T> {
 	private String destination;
 	private T connection;
 
-	public StompSubscription(StompMessage stomp, T connection) {
+	public StompSubscription(StompFrame stomp, T connection) {
 		this.connection = connection;
-		id = stomp.getAttribute("id");
-		destination = stomp.getAttribute("destination");
+		id = stomp.getHeader("id");
+		destination = stomp.getHeader("destination");
 	}
 	
 	public String getId() {

@@ -10,8 +10,8 @@ public class StompConnection {
 	
 	String useVersion;
 	
-	public StompConnection(StompMessage message) {
-		String acceptVersion = message.getAttribute("accept-version");
+	public StompConnection(StompFrame message) {
+		String acceptVersion = message.getHeader("accept-version");
 		if (acceptVersion != null) {
 			String[] versions = acceptVersion.split(",");
 
@@ -33,17 +33,17 @@ public class StompConnection {
 		}
 	}
 	
-	public StompMessage getResponse() {
-		StompMessage message = new StompMessage();
+	public StompFrame getResponse() {
+		StompFrame message = new StompFrame();
 		if (useVersion != null) {
-			message.setCommand(StompMessage.Command.CONNECTED);
-			message.setAttribute("version", useVersion);
+			message.setCommand(StompFrame.Command.CONNECTED);
+			message.setHeader("version", useVersion);
 			// TODO heartbeat!!!
-			message.setAttribute("heart-beat", "0,0");
+			message.setHeader("heart-beat", "0,0");
 		}
 		else {
-			message.setCommand(StompMessage.Command.ERROR);
-			message.setAttribute("version", supportedVersionString);
+			message.setCommand(StompFrame.Command.ERROR);
+			message.setHeader("version", supportedVersionString);
 			String text = "Supported protocol versions are " + supportedVersionString;
 			message.setContent(text.getBytes());
 		}

@@ -7,19 +7,22 @@ import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 
-/*
- * This class is self-sufficient to parse and generate STOMP messages.
+/**
+ * This follows STOMP 1.2 specification to parse and generate STOMP frames:
+ *   https://stomp.github.io/stomp-specification-1.2.html
+ * 
+ * This single class is self-sufficient handle all STOMP frames.
  * 
  * Note for WebSocket:
  * If input comes as WebSocket text type, (WS RFC says Text is UTF-8)
  * server side handling code like Spring TextMessage may convert the bytes to String as UTF-8
- * which maybe the wrong encoding as STOMP message itself can use other encoding.
+ * which maybe the wrong encoding as STOMP frame itself can use other encoding.
+ *   e.g. A particular encoding may have bytes: FF FF FF FF FF FF FF FF FF FF... 10, that is completely out of range for Unicode.
+ * Unless STOMP body is also UTF-8, STOMP frame must be sent as binary
  * 
- * e.g. A particular encoding may have bytes: FF FF FF FF FF FF FF FF FF FF... 10, that is completely out of range for Unicode.
- * 
- * Unless STOMP message body is also UTF-8, STOMP messages must be sent as binary
+ * @author Alan Lei
  */
-public class StompMessage {
+public class StompFrame {
 	public enum Command {
 		CONNECT, STOMP, CONNECTED, SEND, SUBSCRIBE, UNSUBSCRIBE, ACK, NACK,
 		BEGIN, COMMIT, ABORT, DISCONNECT, MESSAGE, RECEIPT, ERROR;
@@ -35,11 +38,11 @@ public class StompMessage {
 			return mapOfStringToCommand.get(value);
 		}
 	}
-
 	
-	Command command;
-	Map<String, String> attributes = new HashMap<>();
-	byte[] content;
+	private Command command;
+	private Map<String, String> headers = new HashMap<>();
+	private byte[] content;
+	private final static int MAX_BUFFER_SIZE = 1024;
 	
 	public Command getCommand() {
 		return command;
@@ -49,12 +52,12 @@ public class StompMessage {
 		this.command = command;
 	}
 	
-	public String getAttribute(String name) {
-		return attributes.get(name);
+	public String getHeader(String name) {
+		return headers.get(name);
 	}
 	
-	public void setAttribute(String name, String value) {
-		attributes.put(name, value);
+	public void setHeader(String name, String value) {
+		headers.put(name, value);
 	}
 	
 	public byte[] getContent() {
@@ -68,10 +71,10 @@ public class StompMessage {
 	public void write(OutputStream out) throws IOException {
 		out.write(command.name().getBytes());
 		out.write('\n');
-		for (String name : attributes.keySet()) {
+		for (String name : headers.keySet()) {
 			out.write(name.getBytes());
 			out.write(':');
-			out.write(attributes.get(name).getBytes());
+			out.write(headers.get(name).getBytes());
 			out.write('\n');
 		}
 		out.write('\n');
@@ -81,66 +84,69 @@ public class StompMessage {
 		out.write(0);
 	}
 	
-	private static String readLine(InputStream in) throws IOException {
-		byte[] line = new byte[1024];
+	private static String readLine(InputStream in) throws IOException, ParseException {
+		byte[] line = new byte[MAX_BUFFER_SIZE];
 		int index = 0;
-		// TODO line too long!!!
-		while (index < 1024) {
+		while (index < MAX_BUFFER_SIZE) {
 			int b = in.read();
 			if (b != -1) {
-				if (b == '\n') break;
+				if (b == '\n') {
+					return new String(line, 0, index);			
+				}
 				if (b != '\r') {
 					line[index] = (byte)b;
 					index++;
 				}
 			}
 			else {
+				// No line found
 				return null;
 			}
 		}
-		return new String(line, 0, index);			
+		throw new ParseException("Line too long", MAX_BUFFER_SIZE);
 	}
 	
 	/*
 	 * Using InputStream instead of Reader because
 	 * content-length is octet count instead of character count
 	 */
-	public static StompMessage parse(InputStream reader) throws IOException, ParseException {
-		StompMessage stomp = new StompMessage();
+	public static StompFrame parse(InputStream reader) throws IOException, ParseException {
+		StompFrame stomp = new StompFrame();
 		
+		// Read Command
 		String line = readLine(reader);
 		Command command = Command.get(line);
 		if (command == null) throw new ParseException("Unknown command: " + line, 0);
 		stomp.setCommand(command);
 		
-		// Attributes
+		// Read Headers
 		int contentLength = -1;
 		while ((line = readLine(reader)) != null) {
 			if (line.equals("")) break;
 			int colon = line.indexOf(':');
 			String name = line.substring(0, colon);
 			String value = line.substring(colon + 1);
-			stomp.setAttribute(name, value);
+			stomp.setHeader(name, value);
 			if (name.equals("content-length")) {
 				contentLength = Integer.parseInt(value);
 			}
 		}
 		
-		// Content
+		// Read Content
 		if (contentLength != -1) {
-			// content-length is octet
+			// content-length is in octets
 			byte[] content = new byte[contentLength];
 			reader.read(content);
 			stomp.setContent(content);
-			// TODO check last byte
 			if (reader.read() != 0) {
-				throw new ParseException("End byte not zero in value", -1);
+				throw new ParseException("Byte after STOMP Body not NULL", -1);
 			}
 		}
 		else {
-			byte[] buffer = new byte[1024];
+			// No content-length. Look for ending NULL byte.
+			byte[] buffer = new byte[MAX_BUFFER_SIZE];
 			int length = 0;
-			while (length < 1024) {
+			while (length < MAX_BUFFER_SIZE) {
 				int b = reader.read();
 				if (b == -1) {
 					throw new ParseException("Premature end of stream", -1);
@@ -151,12 +157,13 @@ public class StompMessage {
 						System.arraycopy(buffer, 0, content, 0, length);
 						stomp.setContent(content);
 					}
+					// More EOLs may follow, but ignored.
 					return stomp;
 				}
 				buffer[length] = (byte)b;
 				length++;
 			}
-			throw new ParseException("Message too long", -1);
+			throw new ParseException("Frame too long", -1);
 		}
 		return stomp;
 	}
