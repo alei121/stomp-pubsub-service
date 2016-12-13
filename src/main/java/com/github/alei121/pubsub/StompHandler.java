@@ -19,9 +19,9 @@ import com.github.alei121.stomp.StompConnection;
 import com.github.alei121.stomp.StompFrame;
 import com.github.alei121.stomp.StompSubscription;
 
-// TODO incomplete!!!
+// Handles CONNECT, STOMP, SEND and SUBSCRIBE frames
 public class StompHandler extends TextWebSocketHandler {
-	private static Map<String, Queue<StompSubscription<WebSocketSession>>> mapOfTopicToSubscriptions = new ConcurrentHashMap<>();
+	private static Map<String, Queue<StompSubscription>> mapOfTopicToSubscriptions = new ConcurrentHashMap<>();
 	
 	public void connect(WebSocketSession session, StompFrame stomp) throws IOException {
 		StompConnection connection = new StompConnection(stomp);
@@ -36,11 +36,11 @@ public class StompHandler extends TextWebSocketHandler {
 	}
 	
 	public void subscribe(WebSocketSession session, StompFrame stomp) {
-		StompSubscription<WebSocketSession> subscription = new StompSubscription<>(stomp, session);
-		Queue<StompSubscription<WebSocketSession>> subscriptions = mapOfTopicToSubscriptions.get(subscription.getDestination());
+		StompSubscription subscription = new StompSubscription(stomp, session);
+		Queue<StompSubscription> subscriptions = mapOfTopicToSubscriptions.get(subscription.getTopic());
 		if (subscriptions == null) {
 			subscriptions = new ConcurrentLinkedQueue<>();
-			mapOfTopicToSubscriptions.put(subscription.getDestination(), subscriptions);
+			mapOfTopicToSubscriptions.put(subscription.getTopic(), subscriptions);
 		}
 		subscriptions.add(subscription);
 	}
@@ -48,17 +48,16 @@ public class StompHandler extends TextWebSocketHandler {
 	private static AtomicInteger currentMessageID = new AtomicInteger();
 	public void send(StompFrame stomp) throws IOException {
 		String dest = stomp.getHeader("destination");
-		Queue<StompSubscription<WebSocketSession>> subscriptions = mapOfTopicToSubscriptions.get(dest);
+		Queue<StompSubscription> subscriptions = mapOfTopicToSubscriptions.get(dest);
 		if (subscriptions != null) {
 			stomp.setCommand(StompFrame.Command.MESSAGE);
 			stomp.setHeader("message-id", Integer.toString(currentMessageID.getAndIncrement()));
-			for (StompSubscription<WebSocketSession> subscription : subscriptions) {
-				// TODO reconstructing everytime!!!
+			for (StompSubscription subscription : subscriptions) {
 				stomp.setHeader("subscription", subscription.getId());
 				ByteArrayOutputStream ba = new ByteArrayOutputStream();
 				stomp.write(ba);
 				TextMessage message = new TextMessage(ba.toByteArray());
-				subscription.getConnection().sendMessage(message);
+				subscription.getSession().sendMessage(message);
 			}
 		}
 	}
@@ -84,11 +83,11 @@ public class StompHandler extends TextWebSocketHandler {
 	
 	@Override
 	public void afterConnectionClosed(WebSocketSession session,	CloseStatus status) throws Exception {
-		for (Queue<StompSubscription<WebSocketSession>> subscriptions : mapOfTopicToSubscriptions.values()) {
-			Iterator<StompSubscription<WebSocketSession>> i = subscriptions.iterator();
+		for (Queue<StompSubscription> subscriptions : mapOfTopicToSubscriptions.values()) {
+			Iterator<StompSubscription> i = subscriptions.iterator();
 			while (i.hasNext()) {
-				StompSubscription<WebSocketSession> subscription = i.next();
-				if (subscription.getConnection() == session) {
+				StompSubscription subscription = i.next();
+				if (subscription.getSession() == session) {
 					i.remove();
 				}
 			}

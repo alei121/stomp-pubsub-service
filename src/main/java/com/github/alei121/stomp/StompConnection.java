@@ -38,7 +38,7 @@ public class StompConnection {
 		if (useVersion != null) {
 			message.setCommand(StompFrame.Command.CONNECTED);
 			message.setHeader("version", useVersion);
-			// TODO heartbeat!!!
+			// Ignore heartbeat
 			message.setHeader("heart-beat", "0,0");
 		}
 		else {

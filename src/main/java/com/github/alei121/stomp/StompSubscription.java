@@ -1,26 +1,27 @@
 package com.github.alei121.stomp;
 
+import org.springframework.web.socket.WebSocketSession;
 
-public class StompSubscription<T> {
+public class StompSubscription {
 	private String id;
-	private String destination;
-	private T connection;
+	private String topic;
+	private WebSocketSession session;
 
-	public StompSubscription(StompFrame stomp, T connection) {
-		this.connection = connection;
+	public StompSubscription(StompFrame stomp, WebSocketSession session) {
+		this.session = session;
 		id = stomp.getHeader("id");
-		destination = stomp.getHeader("destination");
+		topic = stomp.getHeader("destination");
 	}
 	
 	public String getId() {
 		return id;
 	}
 	
-	public String getDestination() {
-		return destination;
+	public String getTopic() {
+		return topic;
 	}
 	
-	public T getConnection() {
-		return connection;
+	public WebSocketSession getSession() {
+		return session;
 	}
 }
